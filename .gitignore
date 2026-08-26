@@ -32,7 +32,7 @@ Build/
 build/
 Release/
 release/
-dist/
+dist/*
 !dist/.gitkeep
 
 # Local test / cache folders
