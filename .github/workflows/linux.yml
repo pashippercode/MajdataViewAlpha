@@ -1,0 +1,36 @@
+name: Linux
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  linux-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dev dependencies
+        run: bash scripts/linux-install.sh
+
+      - name: Smoke test Maicaiyin and simai_parser
+        run: bash scripts/smoke-linux.sh
+
+      - name: Build native majdata CLI
+        run: dotnet publish MajdataEdit.Cli/MajdataEdit.Cli.csproj -c Release -r linux-x64 -o /tmp/majdata-cli -nologo
+
+      - name: Build Avalonia MajdataEdit
+        run: dotnet publish MajdataEdit.Avalonia/MajdataEdit.Avalonia.csproj -c Release -r linux-x64 -o /tmp/majdata-edit -nologo
+
+      - name: CLI doctor check
+        run: MAJDATA_ROOT=$PWD MAJDATA_PYTHON=$HOME/.venvs/majdataviewalpha/bin/python /tmp/majdata-cli/majdata doctor
+
+      - name: Build Linux release archive
+        run: bash scripts/linux-release.sh
+
+      - name: Upload Linux release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MajdataViewAlpha-Linux
+          path: dist/linux/*.tar.gz

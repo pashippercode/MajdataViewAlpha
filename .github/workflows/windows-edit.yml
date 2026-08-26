@@ -1,0 +1,28 @@
+name: Windows Edit publish
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  publish-edit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish MajdataEdit (win-x64)
+        run: dotnet publish MajdataEdit/MajdataEdit.csproj -c Release -r win-x64 --self-contained false -o artifacts/MajdataEdit
+
+      - name: Publish MajdataLauncher (win-x64)
+        run: dotnet publish MajdataLauncher/MajdataLauncher.csproj -c Release -r win-x64 --self-contained false -o artifacts/MajdataLauncher
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MajdataViewAlpha-Windows-Edit
+          path: artifacts/

@@ -563,28 +563,42 @@ def _bass_init(dll_path: 'str | Path') -> bool:
     global _BASS_LIB, _BASS_READY
     if _BASS_READY:
         return True
-    try:
-        lib = _ctypes.WinDLL(str(dll_path))
-        lib.BASS_Init.restype  = _ctypes.c_int
-        lib.BASS_Init.argtypes = [_ctypes.c_int, _ctypes.c_uint32, _ctypes.c_uint32,
-                                   _ctypes.c_void_p, _ctypes.c_void_p]
-        lib.BASS_SampleLoad.restype  = _ctypes.c_uint32
-        lib.BASS_SampleLoad.argtypes = [_ctypes.c_int, _ctypes.c_char_p,
-                                         _ctypes.c_uint64, _ctypes.c_uint32,
-                                         _ctypes.c_uint32, _ctypes.c_uint32]
-        lib.BASS_SampleGetChannel.restype  = _ctypes.c_uint32
-        lib.BASS_SampleGetChannel.argtypes = [_ctypes.c_uint32, _ctypes.c_uint32]
-        lib.BASS_ChannelSetAttribute.restype  = _ctypes.c_int
-        lib.BASS_ChannelSetAttribute.argtypes = [_ctypes.c_uint32, _ctypes.c_uint32,
-                                                  _ctypes.c_float]
-        lib.BASS_ChannelPlay.restype  = _ctypes.c_int
-        lib.BASS_ChannelPlay.argtypes = [_ctypes.c_uint32, _ctypes.c_int]
-        if lib.BASS_Init(-1, 44100, 0, None, None):
-            _BASS_LIB = lib
-            _BASS_READY = True
-            return True
-    except Exception:
-        pass
+    candidates = [str(dll_path)]
+    if not str(dll_path).endswith('.dll'):
+        candidates.insert(0, str(dll_path))
+    else:
+        # Linux / macOS: try native lib next to bass.dll path
+        base = Path(dll_path).parent
+        candidates.extend([
+            str(base / 'libbass.so'),
+            str(base / 'libbass.dylib'),
+            'libbass.so',
+        ])
+    for path in candidates:
+        if path.endswith('.dll') and not Path(path).is_file():
+            continue
+        try:
+            lib = _ctypes.CDLL(path) if not path.endswith('.dll') else _ctypes.WinDLL(path)
+            lib.BASS_Init.restype  = _ctypes.c_int
+            lib.BASS_Init.argtypes = [_ctypes.c_int, _ctypes.c_uint32, _ctypes.c_uint32,
+                                       _ctypes.c_void_p, _ctypes.c_void_p]
+            lib.BASS_SampleLoad.restype  = _ctypes.c_uint32
+            lib.BASS_SampleLoad.argtypes = [_ctypes.c_int, _ctypes.c_char_p,
+                                             _ctypes.c_uint64, _ctypes.c_uint32,
+                                             _ctypes.c_uint32, _ctypes.c_uint32]
+            lib.BASS_SampleGetChannel.restype  = _ctypes.c_uint32
+            lib.BASS_SampleGetChannel.argtypes = [_ctypes.c_uint32, _ctypes.c_uint32]
+            lib.BASS_ChannelSetAttribute.restype  = _ctypes.c_int
+            lib.BASS_ChannelSetAttribute.argtypes = [_ctypes.c_uint32, _ctypes.c_uint32,
+                                                      _ctypes.c_float]
+            lib.BASS_ChannelPlay.restype  = _ctypes.c_int
+            lib.BASS_ChannelPlay.argtypes = [_ctypes.c_uint32, _ctypes.c_int]
+            if lib.BASS_Init(-1, 44100, 0, None, None):
+                _BASS_LIB = lib
+                _BASS_READY = True
+                return True
+        except Exception:
+            continue
     return False
 
 
@@ -800,3 +814,26 @@ def play_sfx_for_chart(majson: dict, sfx_dir: 'str | Path',
             args=(majson, sfx_dir, t_start, _sfx_cancel),
             daemon=True,
         ).start()
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Convert maidata to Majson JSON.")
+    parser.add_argument("--maidata", type=Path, required=True, help="Path to maidata.txt content file")
+    parser.add_argument("--diff", default="5", help="Difficulty number 1-6")
+    parser.add_argument("--output", type=Path, help="Write JSON to this file instead of stdout")
+    args = parser.parse_args()
+
+    text = args.maidata.read_text(encoding="utf-8")
+    result = maidata_to_majson(text, args.diff)
+    if result is None:
+        raise SystemExit(f"Could not parse difficulty {args.diff} from {args.maidata}")
+
+    payload = json.dumps(result, ensure_ascii=False, indent=2)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(payload, encoding="utf-8")
+        print(f"Wrote {args.output}")
+    else:
+        print(payload)
