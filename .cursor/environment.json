@@ -1,0 +1,4 @@
+{
+  "name": "MajdataViewAlpha Linux",
+  "install": "bash scripts/linux-install.sh"
+}

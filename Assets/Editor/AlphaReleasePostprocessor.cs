@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
@@ -13,47 +14,45 @@ internal sealed class AlphaReleasePostprocessor : IPostprocessBuildWithReport
     public void OnPostprocessBuild(BuildReport report)
     {
         var summary = report.summary;
+        if (summary.platform == BuildTarget.StandaloneLinux64)
+        {
+            CollectLinuxReleaseFiles(summary.outputPath);
+            return;
+        }
+
         if (summary.platform != BuildTarget.StandaloneWindows && summary.platform != BuildTarget.StandaloneWindows64)
             return;
 
-        CollectReleaseFiles(summary.outputPath);
+        CollectWindowsReleaseFiles(summary.outputPath);
 
-        // The player moved to App\MajdataView, so Unity auto-run only fails at the root with a system dialog
         if ((summary.options & BuildOptions.AutoRunPlayer) != 0)
             UnityEngine.Debug.LogWarning(
                 "[MajdataViewAlpha] 请使用 Build 而不是 Build And Run:播放器已移入 App\\MajdataView," +
                 "Unity 的自动运行会报“找不到文件”(构建本身已成功,可忽略该弹窗,手动运行 MajdataLauncher.exe)。");
     }
 
-    private static void CollectReleaseFiles(string builtPlayerPath)
+    private static void CollectWindowsReleaseFiles(string builtPlayerPath)
     {
-        var projectRoot = Directory.GetParent(Application.dataPath)?.FullName
-                          ?? throw new BuildFailedException("Cannot resolve the Unity project directory.");
-        var releaseRoot = Path.GetDirectoryName(builtPlayerPath)
-                          ?? throw new BuildFailedException("Cannot resolve the player output directory.");
+        var projectRoot = RequireProjectRoot();
+        var releaseRoot = RequireReleaseRoot(builtPlayerPath);
         var publishRoot = Path.Combine(projectRoot, "Library", "ReleasePublish");
         var tempRoot = Path.Combine(publishRoot, "temp");
         Directory.CreateDirectory(publishRoot);
         Directory.CreateDirectory(tempRoot);
 
-        // Keep only the single-file Launcher and Pets assets at root; place View and Edit under App.
-        // Never flatten both self-contained outputs into one directory: dependencies with the same
-        // name, such as System.Drawing.Common, have different versions and would break Edit startup.
         var appRoot = Path.Combine(releaseRoot, "App");
         var viewRoot = Path.Combine(appRoot, "MajdataView");
         var editRoot = Path.Combine(appRoot, "MajdataEdit");
         var playerName = Path.GetFileNameWithoutExtension(builtPlayerPath);
 
-        MovePlayerIntoAppFolder(releaseRoot, builtPlayerPath, viewRoot, playerName);
+        MoveWindowsPlayerIntoAppFolder(releaseRoot, builtPlayerPath, viewRoot, playerName);
 
-        // ReadyToRun avoids long first startup from antivirus scanning plus JIT in self-contained builds
         var editOutput = Publish(projectRoot, "MajdataEdit", publishRoot, tempRoot,
             "-p:PublishReadyToRun=true");
         var launcherOutput = Publish(projectRoot, "MajdataLauncher", publishRoot, tempRoot,
             "-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfExtract=true");
         CopyDirectory(editOutput, editRoot);
         CopyLauncherToRoot(launcherOutput, releaseRoot);
-        // Single-file publishing bundles PNG/WebP content but leaves JSON external, so copy pet assets explicitly
         CopyDirectory(Path.Combine(projectRoot, "MajdataLauncher", "Pets"), Path.Combine(releaseRoot, "Pets"));
 
         var skinSource = Path.Combine(projectRoot, "Skin");
@@ -65,14 +64,55 @@ internal sealed class AlphaReleasePostprocessor : IPostprocessBuildWithReport
         RemoveObsoleteReleaseNotes(releaseRoot);
         CopyIfPresent(Path.Combine(projectRoot, "README.md"), Path.Combine(releaseRoot, "README.md"));
 
-        ValidateRelease(viewRoot, editRoot, releaseRoot, playerName, !EditorUserBuildSettings.development);
-        UnityEngine.Debug.Log($"[MajdataViewAlpha] Release dependencies collected in {releaseRoot}");
+        ValidateWindowsRelease(viewRoot, editRoot, releaseRoot, playerName, !EditorUserBuildSettings.development);
+        UnityEngine.Debug.Log($"[MajdataViewAlpha] Windows release collected in {releaseRoot}");
     }
 
-    private static void MovePlayerIntoAppFolder(
+    private static void CollectLinuxReleaseFiles(string builtPlayerPath)
+    {
+        var projectRoot = RequireProjectRoot();
+        var releaseRoot = RequireReleaseRoot(builtPlayerPath);
+        var appRoot = Path.Combine(releaseRoot, "App");
+        var viewRoot = Path.Combine(appRoot, "MajdataView");
+        var toolsRoot = Path.Combine(releaseRoot, "tools", "Maicaiyin");
+        var playerName = Path.GetFileNameWithoutExtension(builtPlayerPath);
+
+        MoveLinuxPlayerIntoAppFolder(releaseRoot, builtPlayerPath, viewRoot, playerName);
+
+        Directory.CreateDirectory(toolsRoot);
+        CopyIfPresent(Path.Combine(projectRoot, "simai_parser.py"), Path.Combine(releaseRoot, "simai_parser.py"));
+        CopyIfPresent(Path.Combine(projectRoot, "README-LINUX.md"), Path.Combine(releaseRoot, "README.md"));
+        CopyIfPresent(Path.Combine(projectRoot, "README.md"), Path.Combine(releaseRoot, "README.full.md"));
+
+        CopyIfPresent(Path.Combine(projectRoot, "MajdataEdit", "tools", "Maicaiyin", "infer.py"),
+            Path.Combine(toolsRoot, "infer.py"));
+        CopyIfPresent(Path.Combine(projectRoot, "MajdataEdit", "tools", "Maicaiyin", "joint-placement-numpy.npz"),
+            Path.Combine(toolsRoot, "joint-placement-numpy.npz"));
+        CopyIfPresent(Path.Combine(projectRoot, "MajdataEdit", "tools", "Maicaiyin", "requirements.txt"),
+            Path.Combine(toolsRoot, "requirements.txt"));
+        CopyDirectory(Path.Combine(projectRoot, "MajdataEdit", "tools", "Maicaiyin", "maicaiyin"), Path.Combine(toolsRoot, "maicaiyin"));
+
+        var skinSource = Path.Combine(projectRoot, "Skin");
+        if (Directory.Exists(skinSource))
+            CopyDirectory(skinSource, Path.Combine(releaseRoot, "Skin"));
+
+        CopyStreamingAssetsForLinux(projectRoot, releaseRoot);
+        WriteLinuxHelperScripts(releaseRoot);
+        ValidateLinuxRelease(viewRoot, toolsRoot, releaseRoot, playerName);
+        UnityEngine.Debug.Log($"[MajdataViewAlpha] Linux release collected in {releaseRoot}");
+    }
+
+    private static string RequireProjectRoot() =>
+        Directory.GetParent(Application.dataPath)?.FullName
+        ?? throw new BuildFailedException("Cannot resolve the Unity project directory.");
+
+    private static string RequireReleaseRoot(string builtPlayerPath) =>
+        Path.GetDirectoryName(builtPlayerPath)
+        ?? throw new BuildFailedException("Cannot resolve the player output directory.");
+
+    private static void MoveWindowsPlayerIntoAppFolder(
         string releaseRoot, string builtPlayerPath, string viewRoot, string playerName)
     {
-        // View contains only build output; recreate it on export to avoid mixing old and new player files
         if (Directory.Exists(viewRoot))
             Directory.Delete(viewRoot, true);
         Directory.CreateDirectory(viewRoot);
@@ -95,13 +135,101 @@ internal sealed class AlphaReleasePostprocessor : IPostprocessBuildWithReport
             "dstoragecore.dll"
         };
         foreach (var entry in entries)
+            MoveIfPresent(Path.Combine(releaseRoot, entry), Path.Combine(viewRoot, entry));
+    }
+
+    private static void MoveLinuxPlayerIntoAppFolder(
+        string releaseRoot, string builtPlayerPath, string viewRoot, string playerName)
+    {
+        if (Directory.Exists(viewRoot))
+            Directory.Delete(viewRoot, true);
+        Directory.CreateDirectory(viewRoot);
+
+        foreach (var burstDebug in Directory.GetDirectories(releaseRoot,
+                     playerName + "_BurstDebugInformation*", SearchOption.TopDirectoryOnly))
+            Directory.Delete(burstDebug, true);
+
+        MoveIfPresent(builtPlayerPath, Path.Combine(viewRoot, Path.GetFileName(builtPlayerPath)));
+        MoveIfPresent(Path.Combine(releaseRoot, playerName + "_Data"), Path.Combine(viewRoot, playerName + "_Data"));
+
+        foreach (var sharedObject in Directory.GetFiles(releaseRoot, "*.so", SearchOption.TopDirectoryOnly))
         {
-            var source = Path.Combine(releaseRoot, entry);
-            var destination = Path.Combine(viewRoot, entry);
-            if (Directory.Exists(source))
-                Directory.Move(source, destination);
-            else if (File.Exists(source))
-                File.Move(source, destination);
+            var name = Path.GetFileName(sharedObject);
+            MoveIfPresent(sharedObject, Path.Combine(viewRoot, name));
+        }
+
+        var unityFolder = Path.Combine(releaseRoot, "UnityPlayer.so");
+        MoveIfPresent(unityFolder, Path.Combine(viewRoot, "UnityPlayer.so"));
+    }
+
+    private static void MoveIfPresent(string source, string destination)
+    {
+        if (Directory.Exists(source))
+            Directory.Move(source, destination);
+        else if (File.Exists(source))
+            File.Move(source, destination);
+    }
+
+    private static void CopyStreamingAssetsForLinux(string projectRoot, string releaseRoot)
+    {
+        var source = Path.Combine(projectRoot, "Assets", "StreamingAssets");
+        if (!Directory.Exists(source))
+            return;
+
+        var destination = Path.Combine(releaseRoot, "Assets", "StreamingAssets");
+        Directory.CreateDirectory(destination);
+        foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
+        {
+            if (file.EndsWith("ffmpeg.exe", StringComparison.OrdinalIgnoreCase)
+                || file.EndsWith("ffmpeg.exe.meta", StringComparison.OrdinalIgnoreCase))
+                continue;
+            var target = Path.Combine(destination, Path.GetRelativePath(source, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(file, target, true);
+        }
+    }
+
+    private static void WriteLinuxHelperScripts(string releaseRoot)
+    {
+        var binRoot = Path.Combine(releaseRoot, "bin");
+        Directory.CreateDirectory(binRoot);
+
+        File.WriteAllText(Path.Combine(binRoot, "maicaiyin-infer"), """
+            #!/usr/bin/env bash
+            set -euo pipefail
+            ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+            VENV="${MAJDATA_PYTHON_VENV:-$HOME/.venvs/majdataviewalpha}"
+            exec "$VENV/bin/python" "$ROOT/tools/Maicaiyin/infer.py" "$@"
+            """);
+
+        File.WriteAllText(Path.Combine(binRoot, "setup-python-env"), """
+            #!/usr/bin/env bash
+            set -euo pipefail
+            ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+            VENV="${MAJDATA_PYTHON_VENV:-$HOME/.venvs/majdataviewalpha}"
+            python3 -m venv "$VENV"
+            "$VENV/bin/pip" install --upgrade pip
+            "$VENV/bin/pip" install -r "$ROOT/tools/Maicaiyin/requirements.txt"
+            echo "Python env ready: $VENV"
+            """);
+
+        foreach (var script in Directory.GetFiles(binRoot))
+        {
+            try
+            {
+                var chmod = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "chmod",
+                    ArgumentList = { "+x", script },
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                });
+                chmod?.WaitForExit();
+            }
+            catch
+            {
+                // chmod may be unavailable on some build hosts; scripts remain usable via bash.
+            }
         }
     }
 
@@ -117,7 +245,7 @@ internal sealed class AlphaReleasePostprocessor : IPostprocessBuildWithReport
         }
     }
 
-    private static void ValidateRelease(
+    private static void ValidateWindowsRelease(
         string viewRoot, string editRoot, string releaseRoot, string playerName, bool fullRelease)
     {
         var dataRoot = Path.Combine(viewRoot, playerName + "_Data");
@@ -157,9 +285,35 @@ internal sealed class AlphaReleasePostprocessor : IPostprocessBuildWithReport
         foreach (var path in required)
             RequirePath(path);
 
-        if (!fullRelease)
-            return;
-        RequirePath(Path.Combine(editRoot, "charts"));
+        if (fullRelease)
+            RequirePath(Path.Combine(editRoot, "charts"));
+    }
+
+    private static void ValidateLinuxRelease(
+        string viewRoot, string toolsRoot, string releaseRoot, string playerName)
+    {
+        var playerCandidates = new[]
+        {
+            Path.Combine(viewRoot, playerName + ".x86_64"),
+            Path.Combine(viewRoot, playerName),
+            Directory.GetFiles(viewRoot, "*.x86_64", SearchOption.TopDirectoryOnly).FirstOrDefault() ?? string.Empty
+        };
+        if (!playerCandidates.Any(File.Exists))
+            throw new BuildFailedException($"Linux player binary is missing under {viewRoot}");
+
+        var required = new[]
+        {
+            Path.Combine(viewRoot, playerName + "_Data"),
+            Path.Combine(toolsRoot, "infer.py"),
+            Path.Combine(toolsRoot, "joint-placement-numpy.npz"),
+            Path.Combine(toolsRoot, "requirements.txt"),
+            Path.Combine(releaseRoot, "simai_parser.py"),
+            Path.Combine(releaseRoot, "README.md"),
+            Path.Combine(releaseRoot, "bin", "maicaiyin-infer"),
+            Path.Combine(releaseRoot, "bin", "setup-python-env")
+        };
+        foreach (var path in required)
+            RequirePath(path);
     }
 
     private static void RequirePath(string path)
@@ -247,6 +401,9 @@ internal sealed class AlphaReleasePostprocessor : IPostprocessBuildWithReport
 
     private static void CopyDirectory(string source, string destination)
     {
+        if (!Directory.Exists(source))
+            return;
+
         Directory.CreateDirectory(destination);
         foreach (var directory in Directory.GetDirectories(source, "*", SearchOption.AllDirectories))
             Directory.CreateDirectory(Path.Combine(destination, Path.GetRelativePath(source, directory)));
@@ -261,7 +418,10 @@ internal sealed class AlphaReleasePostprocessor : IPostprocessBuildWithReport
     private static void CopyIfPresent(string source, string destination)
     {
         if (File.Exists(source))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             File.Copy(source, destination, true);
+        }
     }
 
     private static void RemoveObsoleteReleaseNotes(string releaseRoot)

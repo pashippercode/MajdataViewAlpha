@@ -9,8 +9,10 @@ UserSettings/
 .DS_Store
 ._*
 
-# Unity generated project files
+# Unity generated project files (keep hand-maintained WPF projects)
 *.csproj
+!MajdataEdit/MajdataEdit.csproj
+!MajdataLauncher/MajdataLauncher.csproj
 *.unityproj
 *.sln
 *.slnx
@@ -31,6 +33,7 @@ build/
 Release/
 release/
 dist/
+!dist/.gitkeep
 
 # Local test / cache folders
 .codex-temp/
