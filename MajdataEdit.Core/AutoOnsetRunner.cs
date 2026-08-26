@@ -1,12 +1,11 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.IO;
 using System.Text;
 using Newtonsoft.Json.Linq;
 
 namespace MajdataEdit;
 
-internal sealed record AutoOnsetRequest(
+public sealed record AutoOnsetRequest(
     string AudioPath,
     string Level,
     double? Bpm,
@@ -14,13 +13,13 @@ internal sealed record AutoOnsetRequest(
     double Threshold,
     string? Title);
 
-internal sealed record AutoOnsetResult(
+public sealed record AutoOnsetResult(
     string Chart,
     double Bpm,
     double First,
     int PredictedOnsets);
 
-internal static class AutoOnsetRunner
+public static class AutoOnsetRunner
 {
     public static async Task<AutoOnsetResult> GenerateAsync(
         AutoOnsetRequest request,
@@ -93,12 +92,12 @@ internal static class AutoOnsetRunner
             }
             catch
             {
-                // Temporary output cleanup must not hide a successful generation.
+                // ponytail: temp dir cleanup is best-effort
             }
         }
     }
 
-    private static string ResolveToolDirectory()
+    public static string ResolveToolDirectory()
     {
         var configured = Environment.GetEnvironmentVariable("MAJDATA_MAICAIYIN");
         if (!string.IsNullOrWhiteSpace(configured) && Directory.Exists(configured))
@@ -119,9 +118,12 @@ internal static class AutoOnsetRunner
         if (Directory.Exists(fromBase))
             return fromBase;
 
-        var sibling = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "tools", "Maicaiyin"));
-        if (Directory.Exists(sibling))
-            return sibling;
+        foreach (var relative in new[] { "..", "../.." })
+        {
+            var sibling = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, relative, "tools", "Maicaiyin"));
+            if (Directory.Exists(sibling))
+                return sibling;
+        }
 
         return fromBase;
     }

@@ -1,0 +1,20 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="MajdataEdit.Avalonia.MainWindow"
+        Title="MajdataEdit (Avalonia)"
+        Width="960" Height="640">
+  <DockPanel Margin="8">
+    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+      <Button Name="OpenButton" Content="Open" Width="72" />
+      <Button Name="SaveButton" Content="Save" Width="72" />
+      <Button Name="AutoOnsetButton" Content="Auto-onset" Width="96" />
+      <TextBlock VerticalAlignment="Center" Text="Level" />
+      <TextBox Name="LevelBox" Width="48" Text="10" />
+      <TextBlock VerticalAlignment="Center" Text="BPM" />
+      <TextBox Name="BpmBox" Width="64" Watermark="auto" />
+    </StackPanel>
+    <TextBlock Name="StatusText" DockPanel.Dock="Bottom" Margin="0,8,0,0" Opacity="0.8" />
+    <TextBox Name="Editor" AcceptsReturn="True" TextWrapping="Wrap"
+             FontFamily="monospace" FontSize="14" />
+  </DockPanel>
+</Window>

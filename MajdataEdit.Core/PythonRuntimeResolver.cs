@@ -3,14 +3,9 @@ using System.Runtime.InteropServices;
 
 namespace MajdataEdit;
 
-/// <summary>
-/// Resolves the Maicaiyin Python interpreter and optional isolated package directory.
-/// Windows builds use the bundled runtime under tools/Maicaiyin; Linux/macOS use MAJDATA_PYTHON
-/// or the Cloud Agent venv created by scripts/linux-install.sh.
-/// </summary>
-internal static class PythonRuntimeResolver
+public static class PythonRuntimeResolver
 {
-    internal sealed record ResolvedRuntime(
+    public sealed record ResolvedRuntime(
         string FileName,
         IReadOnlyList<string> PrefixArguments,
         string? PackageDirectory,

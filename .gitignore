@@ -14,6 +14,8 @@ UserSettings/
 !MajdataEdit/MajdataEdit.csproj
 !MajdataLauncher/MajdataLauncher.csproj
 !MajdataEdit.Cli/MajdataEdit.Cli.csproj
+!MajdataEdit.Core/MajdataEdit.Core.csproj
+!MajdataEdit.Avalonia/MajdataEdit.Avalonia.csproj
 *.unityproj
 *.sln
 *.slnx

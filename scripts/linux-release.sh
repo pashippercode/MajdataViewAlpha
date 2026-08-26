@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Assemble a Linux release directory under dist/linux/ (no WPF / Windows binaries).
+# Assemble a Linux release directory under dist/linux/ (Avalonia editor + native CLI).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -15,15 +15,19 @@ fi
 
 bash "$ROOT/scripts/smoke-linux.sh"
 
+rm -rf "$OUT"
+mkdir -p "$OUT/bin" "$OUT/tools" "$OUT/App/MajdataEdit" "$OUT/App/MajdataView"
+
 echo "== Build native majdata CLI =="
 dotnet publish "$ROOT/MajdataEdit.Cli/MajdataEdit.Cli.csproj" -c Release -r linux-x64 --self-contained false -o "$OUT/bin" -nologo
 chmod +x "$OUT/bin/majdata" 2>/dev/null || true
 
+echo "== Build Avalonia MajdataEdit =="
+dotnet publish "$ROOT/MajdataEdit.Avalonia/MajdataEdit.Avalonia.csproj" -c Release -r linux-x64 --self-contained false -o "$OUT/App/MajdataEdit" -nologo
+chmod +x "$OUT/App/MajdataEdit/MajdataEdit" 2>/dev/null || true
+
 # Quick CLI smoke
 MAJDATA_ROOT="$ROOT" MAJDATA_PYTHON="$VENV/bin/python" "$OUT/bin/majdata" doctor
-
-rm -rf "$OUT"
-mkdir -p "$OUT/bin" "$OUT/tools" "$OUT/App/MajdataView"
 
 echo "$VERSION" > "$OUT/VERSION"
 cp "$ROOT/README-LINUX.md" "$OUT/README.md"
@@ -72,6 +76,16 @@ VENV="${MAJDATA_PYTHON_VENV:-$HOME/.venvs/majdataviewalpha}"
 exec "$VENV/bin/python" "$ROOT/tools/Maicaiyin/infer.py" "$@"
 WRAP
 chmod +x "$OUT/bin/maicaiyin-infer"
+
+cat > "$OUT/bin/majdata-edit" <<'WRAP'
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+export MAJDATA_ROOT="$ROOT"
+export MAJDATA_PYTHON="${MAJDATA_PYTHON:-${MAJDATA_PYTHON_VENV:-$HOME/.venvs/majdataviewalpha}/bin/python}"
+exec "$ROOT/App/MajdataEdit/MajdataEdit" "$@"
+WRAP
+chmod +x "$OUT/bin/majdata-edit"
 
 cat > "$OUT/bin/setup-python-env" <<WRAP
 #!/usr/bin/env bash

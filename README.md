@@ -191,7 +191,7 @@ MajdataViewAlpha/
 
 ### Linux 工具链与发布包
 
-Linux 上可运行 **Maicaiyin 自动踩音**、**simai_parser** 及 Unity **Standalone Linux64** 播放器构建。WPF 编辑器与桌宠启动器仍为 Windows 专用。详见 [README-LINUX.md](README-LINUX.md)。
+Linux 上提供 **Avalonia 轻量编辑器**、**majdata CLI**、**Maicaiyin 自动踩音**、**simai_parser** 及 Unity **Standalone Linux64** 播放器构建。完整 WPF 编辑器与桌宠启动器仍为 Windows 专用。详见 [README-LINUX.md](README-LINUX.md)。
 
 ```bash
 ./scripts/linux-install.sh

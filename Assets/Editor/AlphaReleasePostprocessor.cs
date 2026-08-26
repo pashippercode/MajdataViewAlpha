@@ -79,6 +79,17 @@ internal sealed class AlphaReleasePostprocessor : IPostprocessBuildWithReport
 
         MoveLinuxPlayerIntoAppFolder(releaseRoot, builtPlayerPath, viewRoot, playerName);
 
+        var publishRoot = Path.Combine(projectRoot, "Library", "ReleasePublish");
+        var tempRoot = Path.Combine(publishRoot, "temp");
+        Directory.CreateDirectory(publishRoot);
+        Directory.CreateDirectory(tempRoot);
+
+        var editRoot = Path.Combine(appRoot, "MajdataEdit");
+        var cliRoot = Path.Combine(releaseRoot, "bin");
+        Directory.CreateDirectory(cliRoot);
+        PublishLinux(projectRoot, "MajdataEdit.Avalonia", publishRoot, tempRoot, editRoot);
+        PublishLinux(projectRoot, "MajdataEdit.Cli", publishRoot, tempRoot, cliRoot);
+
         Directory.CreateDirectory(toolsRoot);
         CopyIfPresent(Path.Combine(projectRoot, "simai_parser.py"), Path.Combine(releaseRoot, "simai_parser.py"));
         CopyIfPresent(Path.Combine(projectRoot, "README-LINUX.md"), Path.Combine(releaseRoot, "README.md"));
@@ -98,7 +109,7 @@ internal sealed class AlphaReleasePostprocessor : IPostprocessBuildWithReport
 
         CopyStreamingAssetsForLinux(projectRoot, releaseRoot);
         WriteLinuxHelperScripts(releaseRoot);
-        ValidateLinuxRelease(viewRoot, toolsRoot, releaseRoot, playerName);
+        ValidateLinuxRelease(viewRoot, editRoot, toolsRoot, releaseRoot, playerName);
         UnityEngine.Debug.Log($"[MajdataViewAlpha] Linux release collected in {releaseRoot}");
     }
 
@@ -213,6 +224,15 @@ internal sealed class AlphaReleasePostprocessor : IPostprocessBuildWithReport
             echo "Python env ready: $VENV"
             """);
 
+        File.WriteAllText(Path.Combine(binRoot, "majdata-edit"), """
+            #!/usr/bin/env bash
+            set -euo pipefail
+            ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+            export MAJDATA_ROOT="$ROOT"
+            export MAJDATA_PYTHON="${MAJDATA_PYTHON:-${MAJDATA_PYTHON_VENV:-$HOME/.venvs/majdataviewalpha}/bin/python}"
+            exec "$ROOT/App/MajdataEdit/MajdataEdit" "$@"
+            """);
+
         foreach (var script in Directory.GetFiles(binRoot))
         {
             try
@@ -290,7 +310,7 @@ internal sealed class AlphaReleasePostprocessor : IPostprocessBuildWithReport
     }
 
     private static void ValidateLinuxRelease(
-        string viewRoot, string toolsRoot, string releaseRoot, string playerName)
+        string viewRoot, string editRoot, string toolsRoot, string releaseRoot, string playerName)
     {
         var playerCandidates = new[]
         {
@@ -304,13 +324,16 @@ internal sealed class AlphaReleasePostprocessor : IPostprocessBuildWithReport
         var required = new[]
         {
             Path.Combine(viewRoot, playerName + "_Data"),
+            Path.Combine(editRoot, "MajdataEdit"),
             Path.Combine(toolsRoot, "infer.py"),
             Path.Combine(toolsRoot, "joint-placement-numpy.npz"),
             Path.Combine(toolsRoot, "requirements.txt"),
             Path.Combine(releaseRoot, "simai_parser.py"),
             Path.Combine(releaseRoot, "README.md"),
             Path.Combine(releaseRoot, "bin", "maicaiyin-infer"),
-            Path.Combine(releaseRoot, "bin", "setup-python-env")
+            Path.Combine(releaseRoot, "bin", "setup-python-env"),
+            Path.Combine(releaseRoot, "bin", "majdata-edit"),
+            Path.Combine(releaseRoot, "bin", "majdata")
         };
         foreach (var path in required)
             RequirePath(path);
@@ -381,6 +404,56 @@ internal sealed class AlphaReleasePostprocessor : IPostprocessBuildWithReport
                  })
             startInfo.ArgumentList.Add(argument);
         foreach (var argument in extraArguments)
+            startInfo.ArgumentList.Add(argument);
+        startInfo.Environment["TEMP"] = tempRoot;
+        startInfo.Environment["TMP"] = tempRoot;
+        startInfo.Environment["DOTNET_CLI_HOME"] = Path.Combine(tempRoot, "dotnet-home");
+
+        using var process = Process.Start(startInfo)
+                            ?? throw new BuildFailedException($"Failed to start dotnet publish for {projectName}.");
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        process.WaitForExit();
+        var standardOutput = outputTask.GetAwaiter().GetResult();
+        var standardError = errorTask.GetAwaiter().GetResult();
+        if (process.ExitCode != 0)
+            throw new BuildFailedException(
+                $"dotnet publish failed for {projectName}.\n{standardOutput}\n{standardError}");
+        return output;
+    }
+
+    private static string PublishLinux(
+        string projectRoot, string projectName, string publishRoot, string tempRoot, string output)
+    {
+        var projectFile = Path.Combine(projectRoot, projectName, projectName + ".csproj");
+        if (!File.Exists(projectFile))
+            throw new BuildFailedException($"Missing release project: {projectFile}");
+
+        var workRoot = Path.Combine(publishRoot, projectName);
+        if (Directory.Exists(workRoot))
+            Directory.Delete(workRoot, true);
+        if (Directory.Exists(output))
+            Directory.Delete(output, true);
+        Directory.CreateDirectory(output);
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "dotnet",
+            WorkingDirectory = projectRoot,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        var intermediateRoot = Path.Combine(workRoot, "obj") + Path.DirectorySeparatorChar;
+        var buildOutputRoot = Path.Combine(workRoot, "bin") + Path.DirectorySeparatorChar;
+        foreach (var argument in new[]
+                 {
+                     "publish", projectFile, "-c", "Release", "-r", "linux-x64", "--self-contained", "false",
+                     "--nologo", "-o", output,
+                     $"-p:BaseIntermediateOutputPath={intermediateRoot}",
+                     $"-p:BaseOutputPath={buildOutputRoot}"
+                 })
             startInfo.ArgumentList.Add(argument);
         startInfo.Environment["TEMP"] = tempRoot;
         startInfo.Environment["TMP"] = tempRoot;

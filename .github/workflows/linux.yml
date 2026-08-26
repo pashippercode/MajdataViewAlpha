@@ -20,6 +20,9 @@ jobs:
       - name: Build native majdata CLI
         run: dotnet publish MajdataEdit.Cli/MajdataEdit.Cli.csproj -c Release -r linux-x64 -o /tmp/majdata-cli -nologo
 
+      - name: Build Avalonia MajdataEdit
+        run: dotnet publish MajdataEdit.Avalonia/MajdataEdit.Avalonia.csproj -c Release -r linux-x64 -o /tmp/majdata-edit -nologo
+
       - name: CLI doctor check
         run: MAJDATA_ROOT=$PWD MAJDATA_PYTHON=$HOME/.venvs/majdataviewalpha/bin/python /tmp/majdata-cli/majdata doctor
 

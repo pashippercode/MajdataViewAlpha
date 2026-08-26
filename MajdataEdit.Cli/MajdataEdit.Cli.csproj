@@ -10,11 +10,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\MajdataEdit\AutoOnsetRunner.cs" Link="Shared/AutoOnsetRunner.cs" />
-    <Compile Include="..\MajdataEdit\PythonRuntimeResolver.cs" Link="Shared/PythonRuntimeResolver.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <ProjectReference Include="..\MajdataEdit.Core\MajdataEdit.Core.csproj" />
   </ItemGroup>
 </Project>

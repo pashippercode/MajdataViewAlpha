@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Linux-native launcher: View player (if built) + CLI tooling; Edit GUI via Wine when available.
+# Linux-native launcher: View player, Avalonia editor, or CLI tooling.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VIEW="${MAJDATA_VIEW:-$ROOT/App/MajdataView}"
+EDIT="${MAJDATA_EDIT:-$ROOT/App/MajdataEdit/MajdataEdit}"
 CLI="$ROOT/bin/majdata"
 
 view_bin=""
@@ -12,13 +13,20 @@ if [[ -d "$VIEW" ]]; then
 fi
 
 echo "MajdataViewAlpha Linux launcher"
-echo "  CLI:    ${CLI:-$ROOT/scripts/use native majdata CLI after release build}"
 echo "  View:   ${view_bin:-not built — use Unity Standalone Linux64}"
-echo "  Edit:   native CLI (majdata auto-onset) or Wine (scripts/run-edit-wine.sh)"
+echo "  Edit:   ${EDIT} (Avalonia)"
+echo "  CLI:    ${CLI:-$ROOT/bin/majdata after release build}"
 
 if [[ -n "$view_bin" ]]; then
   echo "Starting View: $view_bin"
   exec "$view_bin" "$@"
+fi
+
+if [[ -x "$EDIT" ]]; then
+  export MAJDATA_ROOT="${MAJDATA_ROOT:-$ROOT}"
+  export MAJDATA_PYTHON="${MAJDATA_PYTHON:-${MAJDATA_PYTHON_VENV:-$HOME/.venvs/majdataviewalpha}/bin/python}"
+  echo "Starting Edit: $EDIT"
+  exec "$EDIT" "$@"
 fi
 
 if [[ -x "$ROOT/bin/majdata" ]]; then
