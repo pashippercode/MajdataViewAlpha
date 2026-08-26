@@ -27,19 +27,9 @@ internal static class AutoOnsetRunner
         Action<string>? reportProgress,
         CancellationToken cancellationToken)
     {
-        var toolDirectory = Path.Combine(AppContext.BaseDirectory, "tools", "Maicaiyin");
+        var toolDirectory = ResolveToolDirectory();
         var inferenceScript = Path.Combine(toolDirectory, "infer.py");
-        var modelPath = Path.Combine(toolDirectory, "joint-placement-numpy.npz");
-        var packageDirectory = Path.Combine(toolDirectory, "packages");
-        if (!File.Exists(inferenceScript) || !File.Exists(modelPath) ||
-            !Directory.Exists(packageDirectory))
-            throw new FileNotFoundException(MainWindow.GetLocalizedString("AutoOnsetEngineMissing"), toolDirectory);
-
-        var bootstrap = ResolveBundledPython(toolDirectory);
-        var runtime = new PythonRuntime(
-            bootstrap.FileName,
-            bootstrap.PrefixArguments,
-            packageDirectory);
+        var runtime = PythonRuntimeResolver.ResolveMaicaiyin(toolDirectory);
 
         var outputDirectory = Path.Combine(
             Path.GetTempPath(),
@@ -47,15 +37,14 @@ internal static class AutoOnsetRunner
         Directory.CreateDirectory(outputDirectory);
         try
         {
-            reportProgress?.Invoke(MainWindow.GetLocalizedString("AutoOnsetRunning"));
+            reportProgress?.Invoke("Running Maicaiyin onset engine...");
             var arguments = new List<string>
             {
-                inferenceScript,
                 request.AudioPath,
                 "--output", outputDirectory,
                 "--level", request.Level,
                 "--threshold", request.Threshold.ToString("R", CultureInfo.InvariantCulture),
-                "--model", modelPath
+                "--model", Path.Combine(toolDirectory, "joint-placement-numpy.npz")
             };
             if (request.Bpm.HasValue)
             {
@@ -74,9 +63,7 @@ internal static class AutoOnsetRunner
             }
 
             var processResult = await RunProcessAsync(
-                runtime.FileName,
-                BuildIsolatedScriptArguments(runtime, inferenceScript, arguments.Skip(1)),
-                toolDirectory,
+                PythonRuntimeResolver.CreateStartInfo(runtime, toolDirectory, inferenceScript, arguments),
                 reportProgress,
                 cancellationToken);
             if (processResult.ExitCode != 0)
@@ -85,15 +72,15 @@ internal static class AutoOnsetRunner
             var maidataPath = Path.Combine(outputDirectory, "maidata.txt");
             var reportPath = Path.Combine(outputDirectory, "generation.json");
             if (!File.Exists(maidataPath) || !File.Exists(reportPath))
-                throw new InvalidOperationException(MainWindow.GetLocalizedString("AutoOnsetNoOutput"));
+                throw new InvalidOperationException("Maicaiyin did not produce maidata.txt or generation.json.");
 
             var maidata = await File.ReadAllTextAsync(maidataPath, Encoding.UTF8, cancellationToken);
             var report = JObject.Parse(await File.ReadAllTextAsync(reportPath, Encoding.UTF8, cancellationToken));
             var chart = ExtractGeneratedChart(maidata);
             var bpm = report.Value<double?>("bpm")
-                      ?? throw new InvalidOperationException(MainWindow.GetLocalizedString("AutoOnsetNoOutput"));
+                      ?? throw new InvalidOperationException("Maicaiyin report is missing bpm.");
             var first = report.Value<double?>("offset_seconds")
-                        ?? throw new InvalidOperationException(MainWindow.GetLocalizedString("AutoOnsetNoOutput"));
+                        ?? throw new InvalidOperationException("Maicaiyin report is missing offset_seconds.");
             var predictedOnsets = report.Value<int?>("predicted_onsets") ?? 0;
             return new AutoOnsetResult(chart, bpm, first, predictedOnsets);
         }
@@ -111,33 +98,32 @@ internal static class AutoOnsetRunner
         }
     }
 
-    private static PythonCommand ResolveBundledPython(string workingDirectory)
+    private static string ResolveToolDirectory()
     {
-        var runtime = new PythonCommand(
-            Path.Combine(workingDirectory, "python", "python.exe"),
-            Array.Empty<string>());
-        if (File.Exists(runtime.FileName))
-            return runtime;
+        var configured = Environment.GetEnvironmentVariable("MAJDATA_MAICAIYIN");
+        if (!string.IsNullOrWhiteSpace(configured) && Directory.Exists(configured))
+            return configured;
 
-        throw new InvalidOperationException(MainWindow.GetLocalizedString("AutoOnsetPythonMissing"));
-    }
-
-    private static IReadOnlyList<string> BuildIsolatedScriptArguments(
-        PythonRuntime runtime,
-        string script,
-        IEnumerable<string> scriptArguments)
-    {
-        const string runner =
-            "import os,runpy,sys; " +
-            "packages=os.path.abspath(sys.argv[1]); script=os.path.abspath(sys.argv[2]); " +
-            "sys.path=[packages,os.path.dirname(script)]+[p for p in sys.path if 'site-packages' not in p.lower() and 'dist-packages' not in p.lower()]; " +
-            "sys.argv=sys.argv[2:]; runpy.run_path(script,run_name='__main__')";
-        var arguments = new List<string>(runtime.PrefixArguments)
+        var root = Environment.GetEnvironmentVariable("MAJDATA_ROOT");
+        if (!string.IsNullOrWhiteSpace(root))
         {
-            "-I", "-c", runner, runtime.PackageDirectory, script
-        };
-        arguments.AddRange(scriptArguments);
-        return arguments;
+            var fromRoot = Path.Combine(root, "MajdataEdit", "tools", "Maicaiyin");
+            if (Directory.Exists(fromRoot))
+                return fromRoot;
+            var fromRelease = Path.Combine(root, "tools", "Maicaiyin");
+            if (Directory.Exists(fromRelease))
+                return fromRelease;
+        }
+
+        var fromBase = Path.Combine(AppContext.BaseDirectory, "tools", "Maicaiyin");
+        if (Directory.Exists(fromBase))
+            return fromBase;
+
+        var sibling = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "tools", "Maicaiyin"));
+        if (Directory.Exists(sibling))
+            return sibling;
+
+        return fromBase;
     }
 
     private static string ExtractGeneratedChart(string maidata)
@@ -145,13 +131,13 @@ internal static class AutoOnsetRunner
         const string marker = "&inote_1=";
         var start = maidata.IndexOf(marker, StringComparison.Ordinal);
         if (start < 0)
-            throw new InvalidOperationException(MainWindow.GetLocalizedString("AutoOnsetNoOutput"));
+            throw new InvalidOperationException("Generated maidata is missing &inote_1=.");
         start += marker.Length;
         while (start < maidata.Length && maidata[start] is '\r' or '\n')
             start++;
         var chart = maidata[start..].Trim();
         if (!chart.EndsWith("E", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException(MainWindow.GetLocalizedString("AutoOnsetNoOutput"));
+            throw new InvalidOperationException("Generated chart does not end with E.");
         return chart;
     }
 
@@ -160,37 +146,14 @@ internal static class AutoOnsetRunner
         var message = string.IsNullOrWhiteSpace(result.StandardError)
             ? result.StandardOutput
             : result.StandardError;
-        return string.Format(
-            CultureInfo.CurrentCulture,
-            MainWindow.GetLocalizedString("AutoOnsetProcessFailed"),
-            result.ExitCode,
-            message.Trim());
+        return $"Maicaiyin failed with exit code {result.ExitCode}: {message.Trim()}";
     }
 
     private static async Task<ProcessResult> RunProcessAsync(
-        string fileName,
-        IEnumerable<string> arguments,
-        string workingDirectory,
+        ProcessStartInfo startInfo,
         Action<string>? reportProgress,
         CancellationToken cancellationToken)
     {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = fileName,
-            WorkingDirectory = workingDirectory,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        foreach (var argument in arguments)
-            startInfo.ArgumentList.Add(argument);
-        startInfo.Environment["PYTHONUTF8"] = "1";
-        startInfo.Environment["PYTHONNOUSERSITE"] = "1";
-        startInfo.Environment["CUDA_VISIBLE_DEVICES"] = "";
-        startInfo.Environment["PIP_NO_INDEX"] = "1";
-        startInfo.Environment["PIP_DISABLE_PIP_VERSION_CHECK"] = "1";
-
         using var process = new Process { StartInfo = startInfo };
         process.Start();
         using var registration = cancellationToken.Register(() =>
@@ -229,10 +192,5 @@ internal static class AutoOnsetRunner
         }
     }
 
-    private sealed record PythonCommand(string FileName, IReadOnlyList<string> PrefixArguments);
-    private sealed record PythonRuntime(
-        string FileName,
-        IReadOnlyList<string> PrefixArguments,
-        string PackageDirectory);
     private sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError);
 }

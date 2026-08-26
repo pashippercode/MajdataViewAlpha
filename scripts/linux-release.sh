@@ -15,6 +15,13 @@ fi
 
 bash "$ROOT/scripts/smoke-linux.sh"
 
+echo "== Build native majdata CLI =="
+dotnet publish "$ROOT/MajdataEdit.Cli/MajdataEdit.Cli.csproj" -c Release -r linux-x64 --self-contained false -o "$OUT/bin" -nologo
+chmod +x "$OUT/bin/majdata" 2>/dev/null || true
+
+# Quick CLI smoke
+MAJDATA_ROOT="$ROOT" MAJDATA_PYTHON="$VENV/bin/python" "$OUT/bin/majdata" doctor
+
 rm -rf "$OUT"
 mkdir -p "$OUT/bin" "$OUT/tools" "$OUT/App/MajdataView"
 

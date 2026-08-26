@@ -800,3 +800,26 @@ def play_sfx_for_chart(majson: dict, sfx_dir: 'str | Path',
             args=(majson, sfx_dir, t_start, _sfx_cancel),
             daemon=True,
         ).start()
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Convert maidata to Majson JSON.")
+    parser.add_argument("--maidata", type=Path, required=True, help="Path to maidata.txt content file")
+    parser.add_argument("--diff", default="5", help="Difficulty number 1-6")
+    parser.add_argument("--output", type=Path, help="Write JSON to this file instead of stdout")
+    args = parser.parse_args()
+
+    text = args.maidata.read_text(encoding="utf-8")
+    result = maidata_to_majson(text, args.diff)
+    if result is None:
+        raise SystemExit(f"Could not parse difficulty {args.diff} from {args.maidata}")
+
+    payload = json.dumps(result, ensure_ascii=False, indent=2)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(payload, encoding="utf-8")
+        print(f"Wrote {args.output}")
+    else:
+        print(payload)

@@ -1,13 +1,46 @@
 # MajdataViewAlpha — Linux
 
-MajdataViewAlpha 在 Linux 上提供 **谱面工具链** 与 **Unity View 播放器**（需自行用 Unity 构建）的支持。WPF 组件 **MajdataEdit** 与 **MajdataLauncher** 仍为 Windows 专用。
+MajdataViewAlpha 在 Linux 上提供 **原生 CLI 工具链**、**Maicaiyin 自动踩音**、**simai_parser**，以及 **Unity View 播放器**（需 Unity 构建）。WPF 全功能 GUI 编辑器主要为 Windows 平台，但可通过 **Wine** 运行 Windows 构建产物。
 
 ## 快速开始（开发 / CI）
 
 ```bash
-./scripts/linux-install.sh      # 安装 .NET SDK、ffmpeg、Python 依赖
+./scripts/linux-install.sh      # .NET SDK、ffmpeg、Python 依赖
 ./scripts/smoke-linux.sh        # 验证 Maicaiyin + simai_parser
-./scripts/linux-release.sh      # 打包 dist/linux/MajdataViewAlpha-Linux-*.tar.gz
+./scripts/linux-release.sh      # 打包 dist/linux/MajdataViewAlpha-Linux-*.tar.gz（含 majdata CLI）
+```
+
+### 原生 CLI（破除 WPF 限制）
+
+Linux 上可直接使用 **`majdata`** 命令（发布包在 `bin/majdata`，开发时 `dotnet run --project MajdataEdit.Cli`）：
+
+```bash
+export MAJDATA_ROOT=/path/to/repo-or-release
+export MAJDATA_PYTHON=~/.venvs/majdataviewalpha/bin/python
+
+majdata doctor
+majdata auto-onset --audio track.wav --level 10 --bpm 120 --output ./out
+majdata parse --maidata ./out/maidata.txt --diff 1 --output chart.json
+```
+
+`AutoOnsetRunner`（WPF 与 CLI 共用）在 Linux 上会自动使用 `MAJDATA_PYTHON` 或 `~/.venvs/majdataviewalpha`，不再依赖 Windows 捆绑 Python。
+
+### Wine 运行 Windows 版 MajdataEdit（可选 GUI）
+
+1. Windows CI 或本地 `dotnet publish` 产出 `MajdataEdit/`（见 `.github/workflows/windows-edit.yml`  artifact）。
+2. Linux 上：
+
+```bash
+bash scripts/wine-install.sh
+MAJDATA_EDIT_WIN=/path/to/MajdataEdit bash scripts/run-edit-wine.sh
+```
+
+Wine 下自动踩音会使用 Linux venv Python（通过 `MAJDATA_PYTHON`）。
+
+### Linux 启动器
+
+```bash
+bash scripts/majdata-launcher.sh   # 优先启动 Unity View；否则运行 majdata doctor
 ```
 
 环境变量：

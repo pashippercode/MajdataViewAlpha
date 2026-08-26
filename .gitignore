@@ -13,6 +13,7 @@ UserSettings/
 *.csproj
 !MajdataEdit/MajdataEdit.csproj
 !MajdataLauncher/MajdataLauncher.csproj
+!MajdataEdit.Cli/MajdataEdit.Cli.csproj
 *.unityproj
 *.sln
 *.slnx

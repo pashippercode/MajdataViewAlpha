@@ -17,6 +17,12 @@ jobs:
       - name: Smoke test Maicaiyin and simai_parser
         run: bash scripts/smoke-linux.sh
 
+      - name: Build native majdata CLI
+        run: dotnet publish MajdataEdit.Cli/MajdataEdit.Cli.csproj -c Release -r linux-x64 -o /tmp/majdata-cli -nologo
+
+      - name: CLI doctor check
+        run: MAJDATA_ROOT=$PWD MAJDATA_PYTHON=$HOME/.venvs/majdataviewalpha/bin/python /tmp/majdata-cli/majdata doctor
+
       - name: Build Linux release archive
         run: bash scripts/linux-release.sh
 
