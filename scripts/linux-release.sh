@@ -26,9 +26,6 @@ echo "== Build Avalonia MajdataEdit =="
 dotnet publish "$ROOT/MajdataEdit.Avalonia/MajdataEdit.Avalonia.csproj" -c Release -r linux-x64 --self-contained false -o "$OUT/App/MajdataEdit" -nologo
 chmod +x "$OUT/App/MajdataEdit/MajdataEdit" 2>/dev/null || true
 
-# Verify the assembled package, not just the source tree.
-MAJDATA_ROOT="$OUT" MAJDATA_PYTHON="$VENV/bin/python" "$OUT/bin/majdata" doctor
-
 echo "$VERSION" > "$OUT/VERSION"
 cp "$ROOT/README-LINUX.md" "$OUT/README.md"
 cp "$ROOT/simai_parser.py" "$OUT/"
@@ -97,6 +94,9 @@ python3 -m venv "\$VENV"
 echo "Python env ready: \$VENV"
 WRAP
 chmod +x "$OUT/bin/setup-python-env"
+
+echo "== Verify assembled package =="
+MAJDATA_ROOT="$OUT" MAJDATA_PYTHON="$VENV/bin/python" "$OUT/bin/majdata" doctor
 
 mkdir -p "$(dirname "$ARCHIVE")"
 tar -C "$(dirname "$OUT")" -czf "$ARCHIVE" "$(basename "$OUT")"
