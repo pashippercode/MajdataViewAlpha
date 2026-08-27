@@ -100,7 +100,10 @@ chmod +x "$OUT/bin/setup-python-env"
 
 mkdir -p "$(dirname "$ARCHIVE")"
 tar -C "$(dirname "$OUT")" -czf "$ARCHIVE" "$(basename "$OUT")"
+(cd "$(dirname "$ARCHIVE")" && sha256sum "$(basename "$ARCHIVE")" > SHA256SUMS)
 
 echo "Release directory: $OUT"
 echo "Archive:           $ARCHIVE"
+echo "Checksums:         $(dirname "$ARCHIVE")/SHA256SUMS"
 du -sh "$OUT" "$ARCHIVE"
+cat "$(dirname "$ARCHIVE")/SHA256SUMS"

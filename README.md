@@ -167,7 +167,7 @@ Alpha 命令写在谱面时间线中：
 
 ## 下载与运行
 
-从 [Releases](https://github.com/Jian04/MajdataViewAlpha/releases) 下载完整发布包，解压后运行：
+从 [Releases](https://github.com/Jian04/MajdataViewAlpha/releases) 下载完整 **Windows** 发布包，解压后运行：
 
 ```text
 MajdataLauncher.exe
@@ -186,6 +186,16 @@ MajdataViewAlpha/
 ```
 
 请保持目录结构完整。也可以直接运行 `App/MajdataEdit/MajdataEdit.exe`。
+
+Linux 包从本仓库 [Releases](https://github.com/pashippercode/MajdataViewAlpha/releases) 下载 `MajdataViewAlpha-Linux-*.tar.gz`，解压后运行：
+
+```bash
+./bin/setup-python-env
+./bin/majdata doctor
+./bin/majdata-edit
+```
+
+详见 [README-LINUX.md](README-LINUX.md)。
 
 ## 从源码构建
 

@@ -3,13 +3,21 @@ name: Linux
 on:
   push:
     branches: [main]
+    tags:
+      - "v*"
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   linux-tools:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Linux dev dependencies
         run: bash scripts/linux-install.sh
@@ -27,10 +35,55 @@ jobs:
         run: MAJDATA_ROOT=$PWD MAJDATA_PYTHON=$HOME/.venvs/majdataviewalpha/bin/python /tmp/majdata-cli/majdata doctor
 
       - name: Build Linux release archive
+        env:
+          MAJDATA_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: bash scripts/linux-release.sh
 
       - name: Upload Linux release artifact
         uses: actions/upload-artifact@v4
         with:
           name: MajdataViewAlpha-Linux
-          path: dist/linux/*.tar.gz
+          path: |
+            dist/linux/*.tar.gz
+            dist/linux/SHA256SUMS
+
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MajdataViewAlpha ${{ github.ref_name }} Linux
+          draft: false
+          make_latest: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/linux/*.tar.gz
+            dist/linux/SHA256SUMS
+          body: |
+            Linux 发布包：Avalonia 轻量编辑器、majdata CLI、Maicaiyin 自动踩音与 simai_parser。
+
+            ## 包含
+
+            - `bin/majdata` — 命令行工具
+            - `bin/majdata-edit` — Avalonia 编辑器启动脚本
+            - `bin/maicaiyin-infer` — 自动踩音
+            - `bin/setup-python-env` — 目标机器 Python 环境
+            - `App/MajdataEdit` — 框架依赖发布的编辑器
+            - `tools/Maicaiyin` — 推理引擎与模型
+
+            ## 不含
+
+            - Unity Linux 播放器（需本机用 Unity 6000.4.2f1 构建 Standalone Linux64）
+            - Windows WPF 编辑器与桌宠启动器
+
+            ## 使用
+
+            ```bash
+            tar -xzf MajdataViewAlpha-Linux-${{ github.ref_name }}.tar.gz
+            cd MajdataViewAlpha-Linux-${{ github.ref_name }}
+            ./bin/setup-python-env
+            ./bin/majdata doctor
+            ./bin/majdata-edit
+            ```
+
+            目标机器需要 .NET 8 runtime 与 ffmpeg。详见包内 `README.md`。
