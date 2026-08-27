@@ -57,9 +57,9 @@ static int RunDoctor()
     var ok = true;
     ok &= Check("python3", "python3 --version");
     ok &= Check("ffmpeg", "ffmpeg -version");
-    var tools = ResolveMaicaiyinDir();
-    ok &= File.Exists(Path.Combine(tools, "infer.py"));
-    ok &= File.Exists(Path.Combine(tools, "joint-placement-numpy.npz"));
+    var tools = AutoOnsetRunner.ResolveToolDirectory();
+    ok &= Exists("maicaiyin infer.py", Path.Combine(tools, "infer.py"));
+    ok &= Exists("maicaiyin model", Path.Combine(tools, "joint-placement-numpy.npz"));
     Console.WriteLine(ok ? "doctor-ok" : "doctor-failed");
     return ok ? 0 : 1;
 }
@@ -167,13 +167,11 @@ static int RunParse(string[] args)
     return 0;
 }
 
-static string ResolveMaicaiyinDir()
+static bool Exists(string name, string path)
 {
-    var env = Environment.GetEnvironmentVariable("MAJDATA_MAICAIYIN");
-    if (!string.IsNullOrWhiteSpace(env))
-        return env;
-    var root = Environment.GetEnvironmentVariable("MAJDATA_ROOT") ?? FindRepoRoot();
-    return Path.Combine(root, "MajdataEdit", "tools", "Maicaiyin");
+    var success = File.Exists(path);
+    Console.WriteLine(success ? $"[ok] {name}" : $"[missing] {name} ({path})");
+    return success;
 }
 
 static string ResolveParserScript()

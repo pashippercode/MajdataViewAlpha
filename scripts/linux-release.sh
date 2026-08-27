@@ -26,8 +26,8 @@ echo "== Build Avalonia MajdataEdit =="
 dotnet publish "$ROOT/MajdataEdit.Avalonia/MajdataEdit.Avalonia.csproj" -c Release -r linux-x64 --self-contained false -o "$OUT/App/MajdataEdit" -nologo
 chmod +x "$OUT/App/MajdataEdit/MajdataEdit" 2>/dev/null || true
 
-# Quick CLI smoke
-MAJDATA_ROOT="$ROOT" MAJDATA_PYTHON="$VENV/bin/python" "$OUT/bin/majdata" doctor
+# Verify the assembled package, not just the source tree.
+MAJDATA_ROOT="$OUT" MAJDATA_PYTHON="$VENV/bin/python" "$OUT/bin/majdata" doctor
 
 echo "$VERSION" > "$OUT/VERSION"
 cp "$ROOT/README-LINUX.md" "$OUT/README.md"
