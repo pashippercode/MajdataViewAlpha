@@ -15,7 +15,7 @@ fi
 
 bash "$ROOT/scripts/smoke-linux.sh"
 
-rm -rf "$OUT"
+rm -rf "$ROOT/dist/linux"
 mkdir -p "$OUT/bin" "$OUT/tools" "$OUT/App/MajdataEdit" "$OUT/App/MajdataView"
 
 echo "== Build native majdata CLI =="
