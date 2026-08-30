@@ -10,6 +10,8 @@ MajdataViewAlpha 在 Linux 上提供 **Avalonia 轻量编辑器**、**原生 CLI
 ./scripts/linux-release.sh      # 打包 dist/linux/MajdataViewAlpha-Linux-*.tar.gz
 ```
 
+推送 `v*.*.*` 标签（例如 `v0.4.2`）后，GitHub Actions 会构建 Linux 包并发布到 [Releases](https://github.com/pashippercode/MajdataViewAlpha/releases)。带 `-` 的标签（例如 `v0.4.3-rc1`）会标为 prerelease，不会替换 latest。
+
 ### Avalonia 编辑器（推荐 GUI）
 
 无需 Wine 或 WindowsDesktop SDK，框架依赖发布体积极小：

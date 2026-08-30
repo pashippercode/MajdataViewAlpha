@@ -15,7 +15,7 @@ fi
 
 bash "$ROOT/scripts/smoke-linux.sh"
 
-rm -rf "$OUT"
+rm -rf "$ROOT/dist/linux"
 mkdir -p "$OUT/bin" "$OUT/tools" "$OUT/App/MajdataEdit" "$OUT/App/MajdataView"
 
 echo "== Build native majdata CLI =="
@@ -25,9 +25,6 @@ chmod +x "$OUT/bin/majdata" 2>/dev/null || true
 echo "== Build Avalonia MajdataEdit =="
 dotnet publish "$ROOT/MajdataEdit.Avalonia/MajdataEdit.Avalonia.csproj" -c Release -r linux-x64 --self-contained false -o "$OUT/App/MajdataEdit" -nologo
 chmod +x "$OUT/App/MajdataEdit/MajdataEdit" 2>/dev/null || true
-
-# Quick CLI smoke
-MAJDATA_ROOT="$ROOT" MAJDATA_PYTHON="$VENV/bin/python" "$OUT/bin/majdata" doctor
 
 echo "$VERSION" > "$OUT/VERSION"
 cp "$ROOT/README-LINUX.md" "$OUT/README.md"
@@ -98,9 +95,15 @@ echo "Python env ready: \$VENV"
 WRAP
 chmod +x "$OUT/bin/setup-python-env"
 
+echo "== Verify assembled package =="
+MAJDATA_ROOT="$OUT" MAJDATA_PYTHON="$VENV/bin/python" "$OUT/bin/majdata" doctor
+
 mkdir -p "$(dirname "$ARCHIVE")"
 tar -C "$(dirname "$OUT")" -czf "$ARCHIVE" "$(basename "$OUT")"
+(cd "$(dirname "$ARCHIVE")" && sha256sum "$(basename "$ARCHIVE")" > SHA256SUMS)
 
 echo "Release directory: $OUT"
 echo "Archive:           $ARCHIVE"
+echo "Checksums:         $(dirname "$ARCHIVE")/SHA256SUMS"
 du -sh "$OUT" "$ARCHIVE"
+cat "$(dirname "$ARCHIVE")/SHA256SUMS"
